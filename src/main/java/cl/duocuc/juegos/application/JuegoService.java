@@ -2,7 +2,9 @@ package cl.duocuc.juegos.application;
 
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import cl.duocuc.juegos.domain.Juego;
 import cl.duocuc.juegos.infrastructure.mapper.JuegoMapper;
@@ -26,11 +28,17 @@ public class JuegoService {
     }
 
     public Juego actualizar(Long id, Juego j) {
+        if (!repo.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Juego no encontrado");
+        }
         j.setId(id);
-        return crear(j);
+        return JuegoMapper.toDomain(repo.save(JuegoMapper.toEntity(j)));
     }
 
     public void eliminar(Long id) {
+        if (!repo.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Juego no encontrado");
+        }
         repo.deleteById(id);
     }
 }

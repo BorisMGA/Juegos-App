@@ -99,7 +99,7 @@ sonar {
         property "sonar.projectKey", "juegos-app"
         property "sonar.organization", "mi-organizacion"
         property "sonar.host.url", "https://sonarcloud.io"
-        property "sonar.coverage.jacoco.xmlReportPaths", "${project.buildDir}/reports/jacoco/test/jacocoTestReport.xml"
+        property "sonar.coverage.jacoco.xmlReportPaths", "${layout.buildDirectory.get()}/reports/jacoco/test/jacocoTestReport.xml"
         property "sonar.exclusions", ".github/**,k8s/**,docs/**"
         property "sonar.sources", "src/main/java"
         property "sonar.tests", "src/test/java"

@@ -1,6 +1,7 @@
 package cl.duocuc.juegos;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -10,6 +11,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.web.server.ResponseStatusException;
 
 import cl.duocuc.juegos.application.JuegoService;
 import cl.duocuc.juegos.domain.Juego;
@@ -68,6 +70,7 @@ class JuegoServiceTest {
     void actualizar_seteaIdYGuarda() {
         Juego input = new Juego(null, "FIFA 25", "Deportes");
         JuegoEntity savedEntity = new JuegoEntity(5L, "FIFA 25", "Deportes");
+        when(repo.existsById(5L)).thenReturn(true);
         when(repo.save(any(JuegoEntity.class))).thenReturn(savedEntity);
 
         Juego result = service.actualizar(5L, input);
@@ -79,11 +82,28 @@ class JuegoServiceTest {
     }
 
     @Test
+    void actualizar_lanzaExcepcionSiNoExiste() {
+        when(repo.existsById(99L)).thenReturn(false);
+
+        assertThrows(ResponseStatusException.class, () -> service.actualizar(99L, new Juego(null, "X", "Y")));
+        verify(repo, never()).save(any());
+    }
+
+    @Test
     void eliminar_llamaDeleteById() {
+        when(repo.existsById(3L)).thenReturn(true);
         doNothing().when(repo).deleteById(3L);
 
         service.eliminar(3L);
 
         verify(repo, times(1)).deleteById(3L);
+    }
+
+    @Test
+    void eliminar_lanzaExcepcionSiNoExiste() {
+        when(repo.existsById(99L)).thenReturn(false);
+
+        assertThrows(ResponseStatusException.class, () -> service.eliminar(99L));
+        verify(repo, never()).deleteById(any());
     }
 }
