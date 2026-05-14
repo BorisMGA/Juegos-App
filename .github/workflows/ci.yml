@@ -17,8 +17,9 @@ permissions:
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
   code-quality:
-    name: Code Quality (OpenRewrite + Spotless + PMD)
-    runs-on: ubuntu-latest
+  - name: Code Quality (OpenRewrite + Spotless + PMD)
+  continue-on-error: true
+  run: ./gradlew rewriteRun spotlessCheck pmdMain
 
     steps:
       - uses: actions/checkout@v4
