@@ -48,10 +48,12 @@ jobs:
       - name: Subir reporte PMD
         uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: pmd-report
           path: build/reports/pmd/
           retention-days: 7
+          if-no-files-found: warn
 
   build-and-test:
     name: Build and Test cobertura
@@ -82,20 +84,24 @@ jobs:
       - name: Subir reporte Jacoco
         uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: jacoco-coverage-report
           path: |
             build/reports/jacoco/test/html/
             build/reports/jacoco/test/jacocoTestReport.xml
           retention-days: 7
+          if-no-files-found: warn
 
       - name: Subir resultado de tests
         uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: test-results
           path: build/test-results/test/
           retention-days: 7
+          if-no-files-found: warn
 
   security:
     name: Security Analysis SonarCloud Snyk
@@ -127,10 +133,10 @@ jobs:
 
       - name: Descargar reporte Jacoco
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: jacoco-coverage-report
           path: build/reports/jacoco/test/
-        continue-on-error: true
 
       - name: SonarCloud
         continue-on-error: true
@@ -172,10 +178,12 @@ jobs:
       - name: Subir reporte Snyk
         uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: snyk-security-report
           path: snyk.sarif
           retention-days: 7
+          if-no-files-found: warn
 
   versioning:
     name: Semantic Version v1.x.0
@@ -204,8 +212,8 @@ jobs:
             NEW="v1.$((MINOR + 1)).0"
           fi
 
-          echo "new_tag=$NEW" >> $GITHUB_OUTPUT
           echo "Nuevo tag: $NEW"
+          echo "new_tag=$NEW" >> $GITHUB_OUTPUT
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -247,7 +255,19 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verificar identidad AWS
+        run: aws sts get-caller-identity --region ${{ env.AWS_REGION }}
+
+      - name: Crear repositorio ECR si no existe
+        run: |
+          aws ecr describe-repositories \
+            --repository-names ${{ env.IMAGE_NAME }} \
+            --region ${{ env.AWS_REGION }} || \
+          aws ecr create-repository \
+            --repository-name ${{ env.IMAGE_NAME }} \
+            --region ${{ env.AWS_REGION }}
 
       - name: Login ECR
         id: login-ecr
@@ -256,12 +276,23 @@ jobs:
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Verificar archivos importantes
+        run: |
+          echo "Archivos en la raiz:"
+          ls -la
+          echo "Dockerfile:"
+          ls -la Dockerfile
+          echo "build.gradle:"
+          ls -la build.gradle
+
       - name: Build y push imagen Docker
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile
           push: true
           tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.IMAGE_NAME }}:${{ needs.versioning.outputs.new_tag }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.IMAGE_NAME }}:latest
 
   deploy:
@@ -276,7 +307,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Leer Instance ID de EC2-App desde Parameter Store
         id: get-instance
@@ -284,7 +315,8 @@ jobs:
           EC2_APP=$(aws ssm get-parameter \
             --name "/alumnos/ec2/app" \
             --query "Parameter.Value" \
-            --output text)
+            --output text \
+            --region ${{ env.AWS_REGION }})
 
           echo "instance_id=$EC2_APP" >> $GITHUB_OUTPUT
           echo "EC2-App: $EC2_APP"
@@ -296,8 +328,9 @@ jobs:
             --instance-ids "${{ steps.get-instance.outputs.instance_id }}" \
             --document-name "AWS-RunShellScript" \
             --parameters '{"commands":["sudo -u ec2-user /home/ec2-user/deploy-app.sh"]}' \
-            --comment "Deploy backend latest" \
+            --comment "Deploy backend ${{ needs.versioning.outputs.new_tag }}" \
             --timeout-seconds 300 \
+            --region ${{ env.AWS_REGION }} \
             --query "Command.CommandId" \
             --output text)
 
@@ -310,6 +343,7 @@ jobs:
             STATUS=$(aws ssm get-command-invocation \
               --command-id "${{ steps.ssm-cmd.outputs.command_id }}" \
               --instance-id "${{ steps.get-instance.outputs.instance_id }}" \
+              --region ${{ env.AWS_REGION }} \
               --query "Status" \
               --output text 2>/dev/null || echo "Pending")
 
@@ -325,6 +359,7 @@ jobs:
               aws ssm get-command-invocation \
                 --command-id "${{ steps.ssm-cmd.outputs.command_id }}" \
                 --instance-id "${{ steps.get-instance.outputs.instance_id }}" \
+                --region ${{ env.AWS_REGION }} \
                 --query "StandardErrorContent" \
                 --output text
               exit 1
