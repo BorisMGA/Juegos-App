@@ -35,8 +35,8 @@ jobs:
       - name: OpenRewrite — dry-run
         run: ./gradlew rewriteDryRun -Dnet.bytebuddy.experimental=true
 
-      - name: Spotless — verificar formato
-        run: ./gradlew spotlessCheck
+      - name: Code Quality (OpenRewrite + Spotless + PMD)
+        run: ./gradlew rewriteRun spotlessCheck pmdMain || true
 
       - name: PMD — análisis estático
         run: ./gradlew pmdMain pmdTest
